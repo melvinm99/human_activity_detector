@@ -57,6 +57,10 @@ class MainActivity: FlutterFragmentActivity() {
                 audioProcessor.stopRecordingSession(true)
                 result.success(true)
             }
+            else if (call.method.equals("clearAudioRecordingData")) {
+                audioProcessor.clearAudioData()
+                result.success(true)
+            }
             else if (call.method.equals("computeMfccFeatures")) { // not necessary
                 var success = audioProcessor.calculateMFCCFeatures()
                 result.success(success)

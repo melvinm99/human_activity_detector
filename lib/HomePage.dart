@@ -56,7 +56,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       }
 
       // Subscribe to activity recognition stream.
-      _activityStreamSubscription = activityRecognition.activityStream.handleError(_handleError).listen(onData, onError: onError);
+      _activityStreamSubscription = SensorsManager.activityStream.stream.listen(onData, onError: onError);
 
       //subscribe to the sleep api stream
       if(Platform.isAndroid) {

@@ -18,10 +18,23 @@ class AudioManager {
 
   static Future<bool> stopAudioRecording() async {
     try {
-      final bool stopped = await platform.invokeMethod('stopAudioRecording'); //stops recording nd computes MFCC features
+      final bool stopped = await platform.invokeMethod('stopAudioRecording'); //stops recording and computes MFCC features
+      if(stopped) {
+        clearAudioRecordingData();
+      }
       return stopped;
     } on PlatformException catch (e) {
       print("Failed to stop recording: '${e.message}'.");
+      return false;
+    }
+  }
+
+  static Future<bool> clearAudioRecordingData() async {
+    try {
+      final bool cleared = await platform.invokeMethod('clearAudioRecordingData'); //stops recording and computes MFCC features
+      return cleared;
+    } on PlatformException catch (e) {
+      print("Failed to clear audio data: '${e.message}'.");
       return false;
     }
   }

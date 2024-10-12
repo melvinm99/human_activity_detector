@@ -74,6 +74,8 @@ class SensorsManager {
 
   static final List<SensorsMeasurementEntity> data = [];
 
+  static final StreamController<Activity> activityStream = StreamController.broadcast();
+
   static void init() {
     processingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _processData();
@@ -595,15 +597,22 @@ class SensorsManager {
   }
 
   static void _computeAudioStats(SensorsMeasurementEntity processedData) async {
-    bool computed = await AudioManager.stopAudioRecording();
+    bool computed = await AudioManager.clearAudioRecordingData();
     if (!computed) {
       Logger.logError(text:"Failed to compute Mfcc features");
       return;
     }
     var f = await AudioManager.getMfccFile();
-    print(f);
+    if(f == null) {
+      Logger.logError(text:"Failed to get Mfcc file");
+      return;
+    }
+    if(!(await f.exists())) {
+      Logger.logError(text:"Mfcc file does not exist");
+      return;
+    }
     //print f size in mb
-    print(f!.lengthSync() / (1024 * 1024));
+    Logger.logInfo(text: "MFCC file size in MB: ${f.lengthSync() / (1024 * 1024)}");
     AudioManager.startAudioRecording();
 
 
@@ -793,6 +802,7 @@ static Future<bool> predict() async {
    static void onActivityData(Activity activityEvent) {
     print(activityEvent);
     activityEvents.add(activityEvent);
+    activityStream.add(activityEvent);
   }
   
   static void _computeActivityFeatures(SensorsMeasurementEntity processedData) {

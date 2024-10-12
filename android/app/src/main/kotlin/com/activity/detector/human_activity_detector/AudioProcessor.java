@@ -82,7 +82,16 @@ public class AudioProcessor extends AppCompatActivity{
     }
 
     public File getMFCCFile() {
-        return new File(applicationContext.getDataDir(), MFCC_FILENAME);
+        var file = new File(applicationContext.getDataDir(), MFCC_FILENAME);
+        if(!file.exists()) {
+            try {
+                file.createNewFile();
+            } catch (IOException e) {
+                Log.e(LOG_TAG, "getMFCCFile error: " + e.getMessage());
+            }
+        }
+        Log.d(LOG_TAG, "getMFCCFile: " + file.getAbsolutePath());
+        return file;
     }
 
     public File getAudioPropertiesFile() {
