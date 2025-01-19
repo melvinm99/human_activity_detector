@@ -525,8 +525,8 @@ class SensorsManager {
     processedData.locationBestVerticalAccuracy = bestVerticalAccuracy;
     processedData.locationQuickFeaturesStdLat = stdLat;
     processedData.locationQuickFeaturesStdLong = stdLong;
-    processedData.locationQuickFeaturesLatChange = latChange;
-    processedData.locationQuickFeaturesLongChange = longChange;
+    processedData.locationQuickFeaturesLatChange = latChange > 0.001 ? latChange : 0;
+    processedData.locationQuickFeaturesLongChange = longChange > 0.001 ? longChange : 0;
 
 
     processedData.locationDiameter = diameter;
@@ -788,12 +788,13 @@ static Future<bool> predict() async {
     Response res;
 
     try {
-      res = await dio.post("https://tesibe.swipeapp.studio/predict", data: 
+      res = await dio.post("https://loved-finally-trout.ngrok-free.app/predict", data:
         {
           "data": sensorMeasurements.map((e) => e.toJson()).toList()
         }
       );
     } catch (e) {
+      print("Error while sending data to backend: $e");
       return false;
     }
     return true;

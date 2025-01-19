@@ -1,41 +1,118 @@
 PODS:
+  - battery_plus (1.0.0):
+    - Flutter
+  - connectivity_plus (0.0.1):
+    - Flutter
+    - FlutterMacOS
+  - environment_sensors (0.0.1):
+    - Flutter
   - Flutter (1.0.0)
   - flutter_activity_recognition (0.0.1):
+    - Flutter
+  - flutter_sound_processing (0.0.1):
+    - Flutter
+    - RosaKit
+  - geolocator_apple (1.2.0):
     - Flutter
   - path_provider_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
-  - "permission_handler (5.1.0+2)":
+  - permission_handler_apple (9.3.0):
+    - Flutter
+  - phone_state (1.0.4):
+    - Flutter
+  - PlainPocketFFT (0.0.9)
+  - PocketFFT (0.0.1)
+  - proximity_sensor (0.0.1):
+    - Flutter
+  - record_darwin (1.0.0):
+    - Flutter
+    - FlutterMacOS
+  - RosaKit (0.0.11):
+    - PlainPocketFFT (~> 0.0.9)
+    - PocketFFT (~> 0.0.1)
+  - screen_brightness_ios (0.1.0):
+    - Flutter
+  - sensors_plus (0.0.1):
     - Flutter
   - share_plus (0.0.1):
     - Flutter
 
 DEPENDENCIES:
+  - battery_plus (from `.symlinks/plugins/battery_plus/ios`)
+  - connectivity_plus (from `.symlinks/plugins/connectivity_plus/darwin`)
+  - environment_sensors (from `.symlinks/plugins/environment_sensors/ios`)
   - Flutter (from `Flutter`)
   - flutter_activity_recognition (from `.symlinks/plugins/flutter_activity_recognition/ios`)
+  - flutter_sound_processing (from `.symlinks/plugins/flutter_sound_processing/ios`)
+  - geolocator_apple (from `.symlinks/plugins/geolocator_apple/ios`)
   - path_provider_foundation (from `.symlinks/plugins/path_provider_foundation/darwin`)
-  - permission_handler (from `.symlinks/plugins/permission_handler/ios`)
+  - permission_handler_apple (from `.symlinks/plugins/permission_handler_apple/ios`)
+  - phone_state (from `.symlinks/plugins/phone_state/ios`)
+  - proximity_sensor (from `.symlinks/plugins/proximity_sensor/ios`)
+  - record_darwin (from `.symlinks/plugins/record_darwin/ios`)
+  - screen_brightness_ios (from `.symlinks/plugins/screen_brightness_ios/ios`)
+  - sensors_plus (from `.symlinks/plugins/sensors_plus/ios`)
   - share_plus (from `.symlinks/plugins/share_plus/ios`)
 
+SPEC REPOS:
+  trunk:
+    - PlainPocketFFT
+    - PocketFFT
+    - RosaKit
+
 EXTERNAL SOURCES:
+  battery_plus:
+    :path: ".symlinks/plugins/battery_plus/ios"
+  connectivity_plus:
+    :path: ".symlinks/plugins/connectivity_plus/darwin"
+  environment_sensors:
+    :path: ".symlinks/plugins/environment_sensors/ios"
   Flutter:
     :path: Flutter
   flutter_activity_recognition:
     :path: ".symlinks/plugins/flutter_activity_recognition/ios"
+  flutter_sound_processing:
+    :path: ".symlinks/plugins/flutter_sound_processing/ios"
+  geolocator_apple:
+    :path: ".symlinks/plugins/geolocator_apple/ios"
   path_provider_foundation:
     :path: ".symlinks/plugins/path_provider_foundation/darwin"
-  permission_handler:
-    :path: ".symlinks/plugins/permission_handler/ios"
+  permission_handler_apple:
+    :path: ".symlinks/plugins/permission_handler_apple/ios"
+  phone_state:
+    :path: ".symlinks/plugins/phone_state/ios"
+  proximity_sensor:
+    :path: ".symlinks/plugins/proximity_sensor/ios"
+  record_darwin:
+    :path: ".symlinks/plugins/record_darwin/ios"
+  screen_brightness_ios:
+    :path: ".symlinks/plugins/screen_brightness_ios/ios"
+  sensors_plus:
+    :path: ".symlinks/plugins/sensors_plus/ios"
   share_plus:
     :path: ".symlinks/plugins/share_plus/ios"
 
 SPEC CHECKSUMS:
+  battery_plus: 1ff2e16ba75af2a78387f65476057a390b47885e
+  connectivity_plus: ddd7f30999e1faaef5967c23d5b6d503d10434db
+  environment_sensors: 46802526e2f9e5b84722e0327d6391168b7ad74f
   Flutter: e0871f40cf51350855a761d2e70bf5af5b9b5de7
   flutter_activity_recognition: 5c3b026997742b01e82424ef257db9640822ad77
-  path_provider_foundation: 29f094ae23ebbca9d3d0cec13889cd9060c0e943
-  permission_handler: ccb20a9fad0ee9b1314a52b70b76b473c5f8dab0
-  share_plus: 599aa54e4ea31d4b4c0e9c911bcc26c55e791028
+  flutter_sound_processing: 59fa6cba60eb0c97ead9572deb7e4f8c85a8635a
+  geolocator_apple: 6cbaf322953988e009e5ecb481f07efece75c450
+  path_provider_foundation: 2b6b4c569c0fb62ec74538f866245ac84301af46
+  permission_handler_apple: 9878588469a2b0d0fc1e048d9f43605f92e6cec2
+  phone_state: 699623cef1a83f28ea66bc1d33cf0a65bdb1ffb1
+  PlainPocketFFT: 3763f37fba0737e457ed1a3b9b7bfa70c00ff213
+  PocketFFT: cdbe7ef5b7cd08520655d85d03d701b5ba35fdec
+  proximity_sensor: 87bc974f9d94b03b4b5911ff1f93a61e561e6183
+  record_darwin: df0a677188e5fed18472550298e675f19ddaffbe
+  RosaKit: 6e28b09f5eb990148a401e0c4b4ff0c207bd6569
+  screen_brightness_ios: 7437207a2a9bc56553aa10f782afecf830b4c4e2
+  sensors_plus: 4b7c4bd9c9be2efbd575649368fe77ef09b429ad
+  share_plus: 8875f4f2500512ea181eef553c3e27dba5135aad
 
 PODFILE CHECKSUM: 819463e6a0290f5a72f145ba7cde16e8b6ef0796
 
-COCOAPODS: 1.14.3
+COCOAPODS: 1.16.2
