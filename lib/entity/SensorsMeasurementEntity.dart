@@ -283,7 +283,7 @@ class SensorsMeasurementEntity {
       'discreteTimeOfDayBetween15and21': discreteTimeOfDayBetween15and21,
       'discreteTimeOfDayBetween18and24': discreteTimeOfDayBetween18and24,
       'discreteTimeOfDayBetween21and3': discreteTimeOfDayBetween21and3,
-      'activityType': activityType?.index,
+      'activityType': activityType?.name,
       'activityConfidence': activityConfidence?.index,
     };
   }

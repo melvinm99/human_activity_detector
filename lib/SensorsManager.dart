@@ -70,11 +70,13 @@ class SensorsManager {
 
   static final activityRecognition = FlutterActivityRecognition.instance;
 
-  static final activityEvents = <Activity>[];
+  static Activity? lastActivityEvent;
 
   static final List<SensorsMeasurementEntity> data = [];
 
   static final StreamController<Activity> activityStream = StreamController.broadcast();
+
+  static final StreamController<PredictionEntity> predictionStream = StreamController.broadcast();
 
   static void init() {
     processingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -155,8 +157,10 @@ class SensorsManager {
     magnetometerStreamSubscription?.cancel();
     positionStream?.cancel();
     clear();
+    lastActivityEvent = null;
     AudioManager.stopAudioRecording();
     _activityStreamSubscription?.cancel();
+    requestPredictionTimer?.cancel();
   }
 
   static void _processData() {
@@ -432,7 +436,6 @@ class SensorsManager {
     lightEvents.clear();
     pressureEvents.clear();
     proximityEvents.clear();
-    activityEvents.clear();
   }
 
   static void _computeLocationStats(SensorsMeasurementEntity processedData) {
@@ -597,7 +600,8 @@ class SensorsManager {
   }
 
   static void _computeAudioStats(SensorsMeasurementEntity processedData) async {
-    bool computed = await AudioManager.clearAudioRecordingData();
+    AudioManager.stopAudioRecording();
+    bool computed = await AudioManager.computeMfccFeatures();
     if (!computed) {
       Logger.logError(text:"Failed to compute Mfcc features");
       return;
@@ -613,6 +617,38 @@ class SensorsManager {
     }
     //print f size in mb
     Logger.logInfo(text: "MFCC file size in MB: ${f.lengthSync() / (1024 * 1024)}");
+
+    // convert the mfcc file content to a list of doubles
+    List<MfccMeasureEntity> mfccMeasures = await _computeMfccProperties(f);
+    processedData.audioNaiveMfcc0Mean = mfccMeasures[0].mean;
+    processedData.audioNaiveMfcc0Std = mfccMeasures[0].std;
+    processedData.audioNaiveMfcc1Mean = mfccMeasures[1].mean;
+    processedData.audioNaiveMfcc1Std = mfccMeasures[1].std;
+    processedData.audioNaiveMfcc2Mean = mfccMeasures[2].mean;
+    processedData.audioNaiveMfcc2Std = mfccMeasures[2].std;
+    processedData.audioNaiveMfcc3Mean = mfccMeasures[3].mean;
+    processedData.audioNaiveMfcc3Std = mfccMeasures[3].std;
+    processedData.audioNaiveMfcc4Mean = mfccMeasures[4].mean;
+    processedData.audioNaiveMfcc4Std = mfccMeasures[4].std;
+    processedData.audioNaiveMfcc5Mean = mfccMeasures[5].mean;
+    processedData.audioNaiveMfcc5Std = mfccMeasures[5].std;
+    processedData.audioNaiveMfcc6Mean = mfccMeasures[6].mean;
+    processedData.audioNaiveMfcc6Std = mfccMeasures[6].std;
+    processedData.audioNaiveMfcc7Mean = mfccMeasures[7].mean;
+    processedData.audioNaiveMfcc7Std = mfccMeasures[7].std;
+    processedData.audioNaiveMfcc8Mean = mfccMeasures[8].mean;
+    processedData.audioNaiveMfcc8Std = mfccMeasures[8].std;
+    processedData.audioNaiveMfcc9Mean = mfccMeasures[9].mean;
+    processedData.audioNaiveMfcc9Std = mfccMeasures[9].std;
+    processedData.audioNaiveMfcc10Mean = mfccMeasures[10].mean;
+    processedData.audioNaiveMfcc10Std = mfccMeasures[10].std;
+    processedData.audioNaiveMfcc11Mean = mfccMeasures[11].mean;
+    processedData.audioNaiveMfcc11Std = mfccMeasures[11].std;
+    processedData.audioNaiveMfcc12Mean = mfccMeasures[12].mean;
+    processedData.audioNaiveMfcc12Std = mfccMeasures[12].std;
+
+
+    //await AudioManager.clearAudioRecordingData();
     AudioManager.startAudioRecording();
 
 
@@ -763,17 +799,22 @@ class SensorsManager {
     processedData.discreteTimeOfDayBetween21and3 = hour >= 21 || hour < 3;
   }
 
-static Future<bool> predict() async {
+static Future<void> predict() async {
     if (data.isEmpty) {
       print("No data to predict, skipping request to backend");
-      return false;
+      return;
     }
-    bool result = await requestPredictionToBackend(data);
+    String? prediction = await requestPredictionToBackend(data);
     data.clear();
-    return result;
+    if(prediction == null) {
+      print("No prediction received");
+      return;
+    }
+    PredictionEntity predictionEntity = PredictionEntity(prediction, DateTime.now());
+    predictionStream.add(predictionEntity);
   }
 
-  static Future<bool> requestPredictionToBackend(List<SensorsMeasurementEntity> sensorMeasurements) async {
+  static Future<String?> requestPredictionToBackend(List<SensorsMeasurementEntity> sensorMeasurements) async {
     Dio dio = Dio();
 
     BaseOptions options = BaseOptions(
@@ -795,25 +836,86 @@ static Future<bool> predict() async {
       );
     } catch (e) {
       print("Error while sending data to backend: $e");
-      return false;
+      return null;
     }
-    return true;
+    return res.data["prediction"];
   }
 
    static void onActivityData(Activity activityEvent) {
     print(activityEvent);
-    activityEvents.add(activityEvent);
+    lastActivityEvent = activityEvent;
     activityStream.add(activityEvent);
   }
   
   static void _computeActivityFeatures(SensorsMeasurementEntity processedData) {
-    var activity = activityEvents.lastOrNull;
+    var activity = lastActivityEvent;
     if(activity != null) {
       processedData.activityType = activity.type;
       processedData.activityConfidence = activity.confidence;
     }
 
   }
+
+  static Future<List<MfccMeasureEntity>> _computeMfccProperties(File file) async {
+    final lines = await file.readAsLines();
+
+    // Parse the header
+    final header = lines[0].split(',');
+    final numColumns = header.length;
+
+    // Initialize lists to store column values
+    final columns = List.generate(numColumns, (_) => <double>[]);
+
+    // Parse the data
+    for (var i = 1; i < lines.length; i++) {
+      final values = lines[i].split(',');
+      for (var j = 0; j < numColumns; j++) {
+        var v = double.tryParse(values[j]);
+        if(v == null) {
+          print("Error parsing value: ${values[j]}");
+          v = 0;
+        }
+        columns[j].add(v);
+      }
+    }
+
+    // Calculate mean and standard deviation for each column
+    List<MfccMeasureEntity> mfccMeasures = [];
+    for (var i = 0; i < numColumns; i++) {
+      final mean = calculateMean(columns[i]);
+      final stdDev = calculateStandardDeviation(columns[i], mean);
+
+      print('${header[i]}:');
+      print('  Mean: ${mean.toStringAsFixed(2)}');
+      print('  Standard Deviation: ${stdDev.toStringAsFixed(2)}');
+      print('');
+      MfccMeasureEntity mfccMeasureEntity = MfccMeasureEntity(mean, stdDev);
+      mfccMeasures.add(mfccMeasureEntity);
+    }
+    return mfccMeasures;
+  }
+
+  static double calculateMean(List<double> values) {
+    return values.reduce((a, b) => a + b) / values.length;
+  }
+
+  static double calculateStandardDeviation(List<double> values, double mean) {
+    final variance = values.map((x) => pow(x - mean, 2)).reduce((a, b) => a + b) / values.length;
+    return sqrt(variance);
+  }
   
 }
 
+class PredictionEntity {
+  final String prediction;
+  final DateTime timestamp;
+
+  PredictionEntity(this.prediction, this.timestamp);
+}
+
+class MfccMeasureEntity {
+  final double mean;
+  final double std;
+
+  MfccMeasureEntity(this.mean, this.std);
+}
