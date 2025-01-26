@@ -4,7 +4,6 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
-import 'package:human_activity_detector/AudioManager.dart';
 import 'package:human_activity_detector/Logger.dart';
 import 'package:human_activity_detector/SensorsManager.dart';
 import 'package:human_activity_detector/SleepApiNotifier.dart';
@@ -25,8 +24,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   final _controller = ScrollController();
 
-  bool _systemStarted = false;
-
   void _handleError(dynamic error) {
     Logger.logError(text: 'Catch Error >> $error');
   }
@@ -41,6 +38,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final activityRecognition = FlutterActivityRecognition.instance;
+
+      // Check if the user has granted permission. If not, request permission.
+      ActivityPermission reqResult;
+      reqResult = await activityRecognition.checkPermission();
+      if (reqResult == ActivityPermission.PERMANENTLY_DENIED) {
+        print('Permission is permanently denied.');
+        return;
+      } else if (reqResult == ActivityPermission.DENIED) {
+        reqResult = await activityRecognition.requestPermission();
+        if (reqResult != ActivityPermission.GRANTED) {
+          print('Permission is denied.');
+          return;
+        }
+      }
+
+      // Subscribe to activity recognition stream.
+      _activityStreamSubscription = SensorsManager.activityStream.stream.listen(onData, onError: onError);
+
+      //subscribe to the sleep api stream
+      if(Platform.isAndroid) {
+        SleepApiNotifier().init();
+      }
+      SensorsManager.init();
+    });
   }
 
   @override
@@ -48,46 +71,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return MaterialApp(
       home: Scaffold(
           appBar: AppBar(title: const Text('Human Activity Detector'), centerTitle: true),
-          floatingActionButton: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              FloatingActionButton(
-                  child: const Icon(Icons.save_alt_rounded),
-                  onPressed: () async {
-                    await Logger.logInfo(text: "Exporting logs...");
-                    var file = await Logger.exportLogs();
-                    if (file == null) {
-                      return;
-                    }
-                    var xFile = XFile(file.path);
-                    await Share.shareXFiles([xFile]);
-                    print("File exported: ${file.path}");
-                  }),
-              const SizedBox(width: 10),
-              FloatingActionButton(
-                  child: const Icon(Icons.audio_file_outlined),
-                  onPressed: () async {
-                    await Logger.logInfo(text: "Exporting audio mfcc file...");
-                    var file = await AudioManager.getMfccFile();
-                    if (file == null) {
-                      return;
-                    }
-                    var xFile = XFile(file.path);
-                    await Share.shareXFiles([xFile]);
-                    print("File exported: ${file.path}");
-                  }),
-              const SizedBox(width: 10),
-              FloatingActionButton(
-                  child: Icon(_systemStarted ? Icons.stop_circle : Icons.not_started),
-                  onPressed: () async {
-                    if(_systemStarted) {
-                      _stopSystem();
-                    } else {
-                      _startSystem();
-                    }
-                  }),
-            ],
-          ),
+          floatingActionButton: FloatingActionButton(
+              child: const Icon(Icons.save_alt_rounded),
+              onPressed: () async {
+                await Logger.logInfo(text: "Exporting logs...");
+                var file = await Logger.exportLogs();
+                if (file == null) {
+                  return;
+                }
+                var xFile = XFile(file.path);
+                await Share.shareXFiles([xFile]);
+                print("File exported: ${file.path}");
+              }),
           body: _buildContentView()),
     );
   }
@@ -107,27 +102,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(height: 20.0),
-          Text('Prediction', style: TextStyle(fontSize: 30.0, fontWeight: FontWeight.bold)),
-          StreamBuilder<PredictionEntity>(
-              stream: SensorsManager.predictionStream.stream,
-              builder: (context, snapshot) {
-                final data = snapshot.data;
-                if (data == null) {
-                  return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('No prediction available'),
-                      ]);
-                }
-                return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Prediction: ${data.prediction}'),
-                      SizedBox(height: 10.0),
-                      Text('Updated at: ${data.timestamp}'),
-                    ]);
-              }),
-          SizedBox(height: 10.0),
           Text('Sleep Detection', style: TextStyle(fontSize: 20.0, fontWeight: FontWeight.bold)),
           SizedBox(height: 10.0),
           StreamBuilder<String>(
@@ -177,6 +151,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 }
                 return SizedBox();
               }),
+          SizedBox(height: 10.0),
+          const Text('Last Sleep Event detected', style: TextStyle(fontSize: 16.0, fontWeight: FontWeight.bold)),
           SizedBox(height: 10.0),
           StreamBuilder<String>(
               stream: SleepApiNotifier.receiveStreamController.stream,
@@ -371,44 +347,5 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       default:
         return Icon(Icons.device_unknown);
     }
-  }
-
-  void _startSystem() async {
-    setState(() {
-      _systemStarted = true;
-    });
-    final activityRecognition = FlutterActivityRecognition.instance;
-
-    // Check if the user has granted permission. If not, request permission.
-    ActivityPermission reqResult;
-    reqResult = await activityRecognition.checkPermission();
-    if (reqResult == ActivityPermission.PERMANENTLY_DENIED) {
-      print('Permission is permanently denied.');
-      return;
-    } else if (reqResult == ActivityPermission.DENIED) {
-      reqResult = await activityRecognition.requestPermission();
-      if (reqResult != ActivityPermission.GRANTED) {
-        print('Permission is denied.');
-        return;
-      }
-    }
-
-    // Subscribe to activity recognition stream.
-    _activityStreamSubscription = SensorsManager.activityStream.stream.listen(onData, onError: onError);
-
-    //subscribe to the sleep api stream
-    if(Platform.isAndroid) {
-      SleepApiNotifier().init();
-    }
-    SensorsManager.init();
-  }
-
-  void _stopSystem() {
-    SensorsManager.stop();
-    _activityStreamSubscription?.cancel();
-    _activityStreamSubscription = null;
-    setState(() {
-      _systemStarted = false;
-    });
   }
 }

@@ -209,8 +209,8 @@ class SensorsMeasurementEntity {
       'locationBestVerticalAccuracy': locationBestVerticalAccuracy,
       'locationDiameter': locationDiameter,
       'locationLogDiameter': locationLogDiameter,
-      'locationQuickFeaturesStdLat': locationQuickFeaturesStdLat == null || locationQuickFeaturesStdLat!.isNaN ? null : locationQuickFeaturesStdLat,
-      'locationQuickFeaturesStdLong': locationQuickFeaturesStdLong == null || locationQuickFeaturesStdLong!.isNaN ? null : locationQuickFeaturesStdLong,
+      'locationQuickFeaturesStdLat': locationQuickFeaturesStdLat,
+      'locationQuickFeaturesStdLong': locationQuickFeaturesStdLong,
       'locationQuickFeaturesLatChange': locationQuickFeaturesLatChange,
       'locationQuickFeaturesLongChange': locationQuickFeaturesLongChange,
       'audioNaiveMfcc0Mean': audioNaiveMfcc0Mean,
@@ -283,7 +283,7 @@ class SensorsMeasurementEntity {
       'discreteTimeOfDayBetween15and21': discreteTimeOfDayBetween15and21,
       'discreteTimeOfDayBetween18and24': discreteTimeOfDayBetween18and24,
       'discreteTimeOfDayBetween21and3': discreteTimeOfDayBetween21and3,
-      'activityType': activityType?.name,
+      'activityType': activityType?.index,
       'activityConfidence': activityConfidence?.index,
     };
   }
