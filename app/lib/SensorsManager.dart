@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
@@ -82,9 +82,9 @@ class SensorsManager {
     processingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _processData();
     });
-    requestPredictionTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    /*requestPredictionTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       predict();
-    });
+    });*/
     accelerometerStreamSubscription = accelerometerEventStream().listen(
           (AccelerometerEvent event) {
         accelerometerEventsLock.synchronized(() {
@@ -163,7 +163,7 @@ class SensorsManager {
     requestPredictionTimer?.cancel();
   }
 
-  static void _processData() {
+  static _processData() async {
     var processedData = SensorsMeasurementEntity();
     // compute raw accelerometer magnitude stats
     _computeRawAccMagnitudeStats(processedData);
@@ -176,7 +176,7 @@ class SensorsManager {
     //compute audio stats
     _computeAudioStats(processedData);
     //compute discrete stats
-    _computeDiscreteStats(processedData);
+    await _computeDiscreteStats(processedData);
     //compute low-frequency measurements
     _computeLowFrequencyMeasurements(processedData);
     //compute time of day features
@@ -188,59 +188,47 @@ class SensorsManager {
     data.add(processedData);
 
     clear();
+
+    predict();
   }
 
   static void _computeRawAccMagnitudeStats(SensorsMeasurementEntity processedData) {
-    var mean = 0.0;
-    var std = 0.0;
-    var moment3 = 0.0;
-    var moment4 = 0.0;
-    var percentile25 = 0.0;
-    var percentile50 = 0.0;
-    var percentile75 = 0.0;
-    var meanX = 0.0;
-    var meanY = 0.0;
-    var meanZ = 0.0;
-    var stdX = 0.0;
-    var stdY = 0.0;
-    var stdZ = 0.0;
-    var roXy = 0.0;
-    var roYz = 0.0;
-    var roXz = 0.0;
     var app = [...accelerometerEvents];
+    List<num> magnitudes = [];
+    List<num> valuesX = [];
+    List<num> valuesY = [];
+    List<num> valuesZ = [];
+
     for (var event in app) {
-      mean += event.x + event.y + event.z;
-      std += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment3 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment4 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) *
-          (event.x + event.y + event.z - mean);
-      percentile25 += event.x + event.y + event.z;
-      percentile50 += event.x + event.y + event.z;
-      percentile75 += event.x + event.y + event.z;
-      meanX += event.x;
-      meanY += event.y;
-      meanZ += event.z;
-      stdX += (event.x - meanX) * (event.x - meanX);
-      stdY += (event.y - meanY) * (event.y - meanY);
-      stdZ += (event.z - meanZ) * (event.z - meanZ);
-      roXy += (event.x - meanX) * (event.y - meanY);
-      roYz += (event.y - meanY) * (event.z - meanZ);
-      roXz += (event.x - meanX) * (event.z - meanZ);
+      var sum = event.x + event.y + event.z;
+      magnitudes.add(math.pow(sum, 2));
+      valuesX.add(event.x);
+      valuesY.add(event.y);
+      valuesZ.add(event.z);
     }
-    mean /= accelerometerEvents.length;
-    std /= accelerometerEvents.length;
-    std = sqrt(std);
-    moment3 /= accelerometerEvents.length;
-    moment4 /= accelerometerEvents.length;
-    percentile25 /= accelerometerEvents.length;
-    percentile50 /= accelerometerEvents.length;
-    percentile75 /= accelerometerEvents.length;
+    var magnitude = math.sqrt(magnitudes.reduce((a, b) => a + b)); //L2 norm
+    var magnitudeX = valuesX.reduce((a, b) => a + b);
+    var magnitudeY = valuesY.reduce((a, b) => a + b);
+    var magnitudeZ = valuesZ.reduce((a, b) => a + b);
 
+    var mean = magnitude / accelerometerEvents.length;
+    var meanX = magnitudeX / accelerometerEvents.length;
+    var meanY = magnitudeY / accelerometerEvents.length;
+    var meanZ = magnitudeZ / accelerometerEvents.length;
 
+    var std = standardDeviation(magnitudes);
+    var stdX = standardDeviation(valuesX);
+    var stdY = standardDeviation(valuesY);
+    var stdZ = standardDeviation(valuesZ);
+    var mom3 = moment3(magnitudes);
+    var mom4 = moment4(magnitudes);
+    var percentile25 = scoreAtPercentile(magnitudes, 0.25);
+    var percentile50 = scoreAtPercentile(magnitudes, 0.5);
+    var percentile75 = scoreAtPercentile(magnitudes, 0.75);
     processedData.rawAccMagnitudeStatsMean = mean;
     processedData.rawAccMagnitudeStatsStd = std;
-    processedData.rawAccMagnitudeStatsMoment3 = moment3;
-    processedData.rawAccMagnitudeStatsMoment4 = moment4;
+    processedData.rawAccMagnitudeStatsMoment3 = mom3;
+    processedData.rawAccMagnitudeStatsMoment4 = mom4;
     processedData.rawAccMagnitudeStatsPercentile25 = percentile25;
     processedData.rawAccMagnitudeStatsPercentile50 = percentile50;
     processedData.rawAccMagnitudeStatsPercentile75 = percentile75;
@@ -250,61 +238,100 @@ class SensorsManager {
     processedData.rawAcc3dStdX = stdX;
     processedData.rawAcc3dStdY = stdY;
     processedData.rawAcc3dStdZ = stdZ;
-    processedData.rawAcc3dRoXy = roXy;
+    /*processedData.rawAcc3dRoXy = roXy;
     processedData.rawAcc3dRoYz = roYz;
-    processedData.rawAcc3dRoXz = roXz;
+    processedData.rawAcc3dRoXz = roXz;*/
+  }
+
+  static double moment3(List<num> magnitudes) {
+    if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
+
+    final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
+    final sumCubedDeviations = magnitudes
+        .map((x) => math.pow(x - mean, 3))
+        .reduce((a, b) => a + b);
+
+    var mom3 = sumCubedDeviations / magnitudes.length;
+    if (mom3 == 0) return 0;
+    return mom3.sign * math.pow(mom3.abs(), 1/3);
+  }
+
+  static double moment4(List<num> magnitudes) {
+    if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
+
+    final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
+    final sumFourthDeviations = magnitudes
+        .map((x) => math.pow(x - mean, 4))
+        .reduce((a, b) => a + b);
+
+    final fourthMoment = sumFourthDeviations / magnitudes.length;
+    return math.pow(fourthMoment, 0.25) as double;
+  }
+
+  static double standardDeviation(List<num> magnitudes) {
+    if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
+
+
+    final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
+    final sumSquaredDiffs = magnitudes
+        .map((x) => math.pow(x - mean, 2))
+        .reduce((a, b) => a + b);
+
+    final variance = sumSquaredDiffs / (data.length);
+    return math.sqrt(variance);
+  }
+
+  static double scoreAtPercentile(List<num> data, num percentile) {
+    if (data.isEmpty) throw ArgumentError('Data cannot be empty');
+
+    final sorted = List<double>.from(data)..sort();
+    final index = (sorted.length - 1) * percentile;
+    final lower = index.floor();
+    final fraction = index - lower;
+
+    return (lower >= sorted.length - 1)
+        ? sorted[lower]
+        : sorted[lower] * (1 - fraction) + sorted[lower + 1] * fraction;
   }
 
   static void _computeRawGyroMagnitudeStats(SensorsMeasurementEntity processedData) {
-    var mean = 0.0;
-    var std = 0.0;
-    var moment3 = 0.0;
-    var moment4 = 0.0;
-    var percentile25 = 0.0;
-    var percentile50 = 0.0;
-    var percentile75 = 0.0;
-    var meanX = 0.0;
-    var meanY = 0.0;
-    var meanZ = 0.0;
-    var stdX = 0.0;
-    var stdY = 0.0;
-    var stdZ = 0.0;
-    var roXy = 0.0;
-    var roYz = 0.0;
-    var roXz = 0.0;
     var app = [...gyroscopeEvents];
+    List<num> magnitudes = [];
+    List<num> valuesX = [];
+    List<num> valuesY = [];
+    List<num> valuesZ = [];
+
     for (var event in app) {
-      mean += event.x + event.y + event.z;
-      std += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment3 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment4 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) *
-          (event.x + event.y + event.z - mean);
-      percentile25 += event.x + event.y + event.z;
-      percentile50 += event.x + event.y + event.z;
-      percentile75 += event.x + event.y + event.z;
-      meanX += event.x;
-      meanY += event.y;
-      meanZ += event.z;
-      stdX += (event.x - meanX) * (event.x - meanX);
-      stdY += (event.y - meanY) * (event.y - meanY);
-      stdZ += (event.z - meanZ) * (event.z - meanZ);
-      roXy += (event.x - meanX) * (event.y - meanY);
-      roYz += (event.y - meanY) * (event.z - meanZ);
-      roXz += (event.x - meanX) * (event.z - meanZ);
+      var sum = event.x + event.y + event.z;
+      magnitudes.add(math.pow(sum, 2));
+      valuesX.add(event.x);
+      valuesY.add(event.y);
+      valuesZ.add(event.z);
     }
-    mean /= gyroscopeEvents.length;
-    std /= gyroscopeEvents.length;
-    std = sqrt(std);
-    moment3 /= gyroscopeEvents.length;
-    moment4 /= gyroscopeEvents.length;
-    percentile25 /= gyroscopeEvents.length;
-    percentile50 /= gyroscopeEvents.length;
-    percentile75 /= gyroscopeEvents.length;
+    var magnitude = math.sqrt(magnitudes.reduce((a, b) => a + b)); //L2 norm
+    var magnitudeX = valuesX.reduce((a, b) => a + b);
+    var magnitudeY = valuesY.reduce((a, b) => a + b);
+    var magnitudeZ = valuesZ.reduce((a, b) => a + b);
+
+    var mean = magnitude / accelerometerEvents.length;
+    var meanX = magnitudeX / accelerometerEvents.length;
+    var meanY = magnitudeY / accelerometerEvents.length;
+    var meanZ = magnitudeZ / accelerometerEvents.length;
+
+    var std = standardDeviation(magnitudes);
+    var stdX = standardDeviation(valuesX);
+    var stdY = standardDeviation(valuesY);
+    var stdZ = standardDeviation(valuesZ);
+    var mom3 = moment3(magnitudes);
+    var mom4 = moment4(magnitudes);
+    var percentile25 = scoreAtPercentile(magnitudes, 0.25);
+    var percentile50 = scoreAtPercentile(magnitudes, 0.5);
+    var percentile75 = scoreAtPercentile(magnitudes, 0.75);
 
     processedData.procGyroMagnitudeStatsMean = mean;
     processedData.procGyroMagnitudeStatsStd = std;
-    processedData.procGyroMagnitudeStatsMoment3 = moment3;
-    processedData.procGyroMagnitudeStatsMoment4 = moment4;
+    processedData.procGyroMagnitudeStatsMoment3 = mom3;
+    processedData.procGyroMagnitudeStatsMoment4 = mom4;
     processedData.procGyroMagnitudeStatsPercentile25 = percentile25;
     processedData.procGyroMagnitudeStatsPercentile50 = percentile50;
     processedData.procGyroMagnitudeStatsPercentile75 = percentile75;
@@ -314,61 +341,49 @@ class SensorsManager {
     processedData.procGyro3dStdX = stdX;
     processedData.procGyro3dStdY = stdY;
     processedData.procGyro3dStdZ = stdZ;
-    processedData.procGyro3dRoXy = roXy;
+    /*processedData.procGyro3dRoXy = roXy;
     processedData.procGyro3dRoYz = roYz;
-    processedData.procGyro3dRoXz = roXz;
+    processedData.procGyro3dRoXz = roXz;*/
   }
 
   static void _computeRawMagnetMagnitudeStats(SensorsMeasurementEntity processedData) {
-    var mean = 0.0;
-    var std = 0.0;
-    var moment3 = 0.0;
-    var moment4 = 0.0;
-    var percentile25 = 0.0;
-    var percentile50 = 0.0;
-    var percentile75 = 0.0;
-    var meanX = 0.0;
-    var meanY = 0.0;
-    var meanZ = 0.0;
-    var stdX = 0.0;
-    var stdY = 0.0;
-    var stdZ = 0.0;
-    var roXy = 0.0;
-    var roYz = 0.0;
-    var roXz = 0.0;
     var app = [...magnetometerEvents];
+    List<num> magnitudes = [];
+    List<num> valuesX = [];
+    List<num> valuesY = [];
+    List<num> valuesZ = [];
+
     for (var event in app) {
-      mean += event.x + event.y + event.z;
-      std += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment3 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment4 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) *
-          (event.x + event.y + event.z - mean);
-      percentile25 += event.x + event.y + event.z;
-      percentile50 += event.x + event.y + event.z;
-      percentile75 += event.x + event.y + event.z;
-      meanX += event.x;
-      meanY += event.y;
-      meanZ += event.z;
-      stdX += (event.x - meanX) * (event.x - meanX);
-      stdY += (event.y - meanY) * (event.y - meanY);
-      stdZ += (event.z - meanZ) * (event.z - meanZ);
-      roXy += (event.x - meanX) * (event.y - meanY);
-      roYz += (event.y - meanY) * (event.z - meanZ);
-      roXz += (event.x - meanX) * (event.z - meanZ);
+      var sum = event.x + event.y + event.z;
+      magnitudes.add(math.pow(sum, 2));
+      valuesX.add(event.x);
+      valuesY.add(event.y);
+      valuesZ.add(event.z);
     }
-    mean /= magnetometerEvents.length;
-    std /= magnetometerEvents.length;
-    std = sqrt(std);
-    moment3 /= magnetometerEvents.length;
-    moment4 /= magnetometerEvents.length;
-    percentile25 /= magnetometerEvents.length;
-    percentile50 /= magnetometerEvents.length;
-    percentile75 /= magnetometerEvents.length;
+    var magnitude = math.sqrt(magnitudes.reduce((a, b) => a + b)); //L2 norm
+    var magnitudeX = valuesX.reduce((a, b) => a + b);
+    var magnitudeY = valuesY.reduce((a, b) => a + b);
+    var magnitudeZ = valuesZ.reduce((a, b) => a + b);
+
+    var mean = magnitude / accelerometerEvents.length;
+    var meanX = magnitudeX / accelerometerEvents.length;
+    var meanY = magnitudeY / accelerometerEvents.length;
+    var meanZ = magnitudeZ / accelerometerEvents.length;
+
+    var std = standardDeviation(magnitudes);
+    var stdX = standardDeviation(valuesX);
+    var stdY = standardDeviation(valuesY);
+    var stdZ = standardDeviation(valuesZ);
+    var mom3 = moment3(magnitudes);
+    var mom4 = moment4(magnitudes);
+    var percentile25 = scoreAtPercentile(magnitudes, 0.25);
+    var percentile50 = scoreAtPercentile(magnitudes, 0.5);
+    var percentile75 = scoreAtPercentile(magnitudes, 0.75);
 
     processedData.procGyroMagnitudeStatsMean = mean;
     processedData.procGyroMagnitudeStatsStd = std;
-    processedData.procGyroMagnitudeStatsMoment3 = moment3;
-    processedData.procGyroMagnitudeStatsMoment4 = moment4;
+    processedData.procGyroMagnitudeStatsMoment3 = mom3;
+    processedData.procGyroMagnitudeStatsMoment4 = mom4;
     processedData.procGyroMagnitudeStatsPercentile25 = percentile25;
     processedData.procGyroMagnitudeStatsPercentile50 = percentile50;
     processedData.procGyroMagnitudeStatsPercentile75 = percentile75;
@@ -378,9 +393,9 @@ class SensorsManager {
     processedData.procGyro3dStdX = stdX;
     processedData.procGyro3dStdY = stdY;
     processedData.procGyro3dStdZ = stdZ;
-    processedData.procGyro3dRoXy = roXy;
+    /*processedData.procGyro3dRoXy = roXy;
     processedData.procGyro3dRoYz = roYz;
-    processedData.procGyro3dRoXz = roXz;
+    processedData.procGyro3dRoXz = roXz;*/
   }
 
   static void _initGeoLocator() {
@@ -497,9 +512,9 @@ class SensorsManager {
       }
     }
     stdLat /= locationEvents.length;
-    stdLat = sqrt(stdLat);
+    stdLat = math.sqrt(stdLat);
     stdLong /= locationEvents.length;
-    stdLong = sqrt(stdLong);
+    stdLong = math.sqrt(stdLong);
     latChange = maxLat - minLat;
     longChange = maxLon - minLon;
 
@@ -516,7 +531,7 @@ class SensorsManager {
 
     double diameter = findLargestGeographicDistance(validLatitudes, validLongitudes);
     var epsilon = 0.001;
-    double logDiameter = log(max(diameter, epsilon));
+    double logDiameter = math.log(math.max(diameter, epsilon));
     processedData.locationNumValidUpdates = numValidUpdates;
     processedData.locationLogLatitudeRange = logLatitudeRange;
     processedData.locationLogLongitudeRange = logLongitudeRange;
@@ -538,7 +553,7 @@ class SensorsManager {
 
 
   static double findLargestGeographicDistance(List<double> latitudes, List<double> longitudes) {
-    double deg2rad = pi / 180;
+    double deg2rad = math.pi / 180;
     List<double> rLatitudes = latitudes.map((lat) => deg2rad * lat).toList();
     List<double> rLongitudes = longitudes.map((lon) => deg2rad * lon).toList();
 
@@ -559,20 +574,20 @@ class SensorsManager {
     const R = 6371; // Radius of the earth in km
     var dLat = deg2rad(lat2 - lat1); // deg2rad below
     var dLon = deg2rad(lon2 - lon1);
-    var a = sin(dLat / 2) * sin(dLat / 2) +
-        cos(deg2rad(lat1)) * cos(deg2rad(lat2)) * sin(dLon / 2) * sin(dLon / 2);
-    var c = 2 * atan2(sqrt(a), sqrt(1 - a));
+    var a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(deg2rad(lat1)) * math.cos(deg2rad(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2);
+    var c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     var d = R * c; // Distance in km
     return d;
   }
 
   static double deg2rad(double deg) {
-    return deg * (pi / 180);
+    return deg * (math.pi / 180);
   }
 
   static double logCompression(double val) {
     double epsilon = 0.001;
-    double logVal = log(epsilon + val.abs()) - log(epsilon);
+    double logVal = math.log(epsilon + val.abs()) - math.log(epsilon);
     double compVal = val.sign * logVal;
     return compVal;
   }
@@ -694,7 +709,7 @@ class SensorsManager {
     }*/
   }
 
-  static void _computeDiscreteStats(SensorsMeasurementEntity processedData) async {
+  static _computeDiscreteStats(SensorsMeasurementEntity processedData) async {
     //app state
     processedData.discreteAppStateIsActive = HomePage.appState == AppLifecycleState.resumed;
     processedData.discreteAppStateIsBackground = HomePage.appState == AppLifecycleState.detached || HomePage.appState == AppLifecycleState.paused ||
@@ -900,8 +915,8 @@ static Future<void> predict() async {
   }
 
   static double calculateStandardDeviation(List<double> values, double mean) {
-    final variance = values.map((x) => pow(x - mean, 2)).reduce((a, b) => a + b) / values.length;
-    return sqrt(variance);
+    final variance = values.map((x) => math.pow(x - mean, 2)).reduce((a, b) => a + b) / values.length;
+    return math.sqrt(variance);
   }
   
 }
