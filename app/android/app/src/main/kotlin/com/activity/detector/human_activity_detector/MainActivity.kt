@@ -33,6 +33,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import java.util.Date
+import android.os.Build
 
 
 class MainActivity: FlutterFragmentActivity() {
@@ -126,7 +127,15 @@ class MainActivity: FlutterFragmentActivity() {
                 }
             }
             val intentFilter = IntentFilter( "com.activity.detector")
-            registerReceiver(broadCastReceiver, intentFilter)
+
+
+            // Register the receiver with the appropriate flag
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(broadCastReceiver, intentFilter, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                registerReceiver(broadCastReceiver, intentFilter) // No flag needed for older versions
+            }
+
 
             if (call.method == "initSleepApi") {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), 1)

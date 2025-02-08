@@ -15,6 +15,7 @@ import 'package:human_activity_detector/HomePage.dart';
 import 'package:human_activity_detector/Logger.dart';
 import 'package:human_activity_detector/RingerManager.dart';
 import 'package:human_activity_detector/SleepApiNotifier.dart';
+import 'package:human_activity_detector/configuration.dart';
 import 'package:human_activity_detector/entity/SensorsMeasurementEntity.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:proximity_sensor/proximity_sensor.dart';
@@ -60,17 +61,17 @@ class SensorsManager {
 
   static PhoneState? phoneState;
 
-  static List<double> ambientTempEvents = [];
+  /*static List<double> ambientTempEvents = [];
   static List<double> humidityEvents = [];
   static List<double> lightEvents = [];
   static List<double> pressureEvents = [];
-  static List<int> proximityEvents = [];
+  static List<int> proximityEvents = [];*/
 
   static StreamSubscription<Activity>? _activityStreamSubscription;
 
   static final activityRecognition = FlutterActivityRecognition.instance;
 
-  static Activity? lastActivityEvent;
+  static final activityEvents = <Activity>[];
 
   static final List<SensorsMeasurementEntity> data = [];
 
@@ -79,14 +80,14 @@ class SensorsManager {
   static final StreamController<PredictionEntity> predictionStream = StreamController.broadcast();
 
   static void init() {
-    processingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    processingTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
       _processData();
     });
     /*requestPredictionTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
       predict();
     });*/
     accelerometerStreamSubscription = accelerometerEventStream().listen(
-          (AccelerometerEvent event) {
+      (AccelerometerEvent event) {
         accelerometerEventsLock.synchronized(() {
           accelerometerEvents.add(event);
         });
@@ -98,7 +99,7 @@ class SensorsManager {
       cancelOnError: true,
     );
     gyroscopeStreamSubscription = gyroscopeEventStream().listen(
-          (GyroscopeEvent event) {
+      (GyroscopeEvent event) {
         gyroscopeEventsLock.synchronized(() {
           gyroscopeEvents.add(event);
         });
@@ -110,7 +111,7 @@ class SensorsManager {
       cancelOnError: true,
     );
     magnetometerStreamSubscription = magnetometerEventStream().listen(
-          (MagnetometerEvent event) {
+      (MagnetometerEvent event) {
         magnetometerEventsLock.synchronized(() {
           magnetometerEvents.add(event);
         });
@@ -129,18 +130,16 @@ class SensorsManager {
     _initGeoLocator();
     _initAudio();
     AudioManager.startAudioRecording();
-    _initEnvironmentalSensors();
+    //_initEnvironmentalSensors();
 
     // Subscribe to activity recognition stream.
     _activityStreamSubscription = activityRecognition.activityStream.handleError(_handleError).listen(onActivityData, onError: onActivityError);
 
     //subscribe to the sleep api stream
-    if(Platform.isAndroid) {
+    if (Platform.isAndroid) {
       SleepApiNotifier().init();
     }
-
   }
-
 
   static void _handleError(dynamic error) {
     Logger.logError(text: 'Catch Error >> $error');
@@ -157,7 +156,7 @@ class SensorsManager {
     magnetometerStreamSubscription?.cancel();
     positionStream?.cancel();
     clear();
-    lastActivityEvent = null;
+    activityEvents.clear();
     AudioManager.stopAudioRecording();
     _activityStreamSubscription?.cancel();
     requestPredictionTimer?.cancel();
@@ -174,14 +173,14 @@ class SensorsManager {
     //compute location stats
     _computeLocationStats(processedData);
     //compute audio stats
-    _computeAudioStats(processedData);
+    await _computeAudioStats(processedData);
     //compute discrete stats
     await _computeDiscreteStats(processedData);
     //compute low-frequency measurements
-    _computeLowFrequencyMeasurements(processedData);
+    await _computeLowFrequencyMeasurements(processedData);
     //compute time of day features
     _computeTimeOfDayFeatures(processedData);
-    
+
     //compute activity features
     _computeActivityFeatures(processedData);
 
@@ -247,22 +246,18 @@ class SensorsManager {
     if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
 
     final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
-    final sumCubedDeviations = magnitudes
-        .map((x) => math.pow(x - mean, 3))
-        .reduce((a, b) => a + b);
+    final sumCubedDeviations = magnitudes.map((x) => math.pow(x - mean, 3)).reduce((a, b) => a + b);
 
     var mom3 = sumCubedDeviations / magnitudes.length;
     if (mom3 == 0) return 0;
-    return mom3.sign * math.pow(mom3.abs(), 1/3);
+    return mom3.sign * math.pow(mom3.abs(), 1 / 3);
   }
 
   static double moment4(List<num> magnitudes) {
     if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
 
     final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
-    final sumFourthDeviations = magnitudes
-        .map((x) => math.pow(x - mean, 4))
-        .reduce((a, b) => a + b);
+    final sumFourthDeviations = magnitudes.map((x) => math.pow(x - mean, 4)).reduce((a, b) => a + b);
 
     final fourthMoment = sumFourthDeviations / magnitudes.length;
     return math.pow(fourthMoment, 0.25) as double;
@@ -271,13 +266,10 @@ class SensorsManager {
   static double standardDeviation(List<num> magnitudes) {
     if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
 
-
     final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
-    final sumSquaredDiffs = magnitudes
-        .map((x) => math.pow(x - mean, 2))
-        .reduce((a, b) => a + b);
+    final sumSquaredDiffs = magnitudes.map((x) => math.pow(x - mean, 2)).reduce((a, b) => a + b);
 
-    final variance = sumSquaredDiffs / (data.length);
+    final variance = sumSquaredDiffs / (magnitudes.length);
     return math.sqrt(variance);
   }
 
@@ -289,9 +281,7 @@ class SensorsManager {
     final lower = index.floor();
     final fraction = index - lower;
 
-    return (lower >= sorted.length - 1)
-        ? sorted[lower]
-        : sorted[lower] * (1 - fraction) + sorted[lower + 1] * fraction;
+    return (lower >= sorted.length - 1) ? sorted[lower] : sorted[lower] * (1 - fraction) + sorted[lower + 1] * fraction;
   }
 
   static void _computeRawGyroMagnitudeStats(SensorsMeasurementEntity processedData) {
@@ -380,19 +370,19 @@ class SensorsManager {
     var percentile50 = scoreAtPercentile(magnitudes, 0.5);
     var percentile75 = scoreAtPercentile(magnitudes, 0.75);
 
-    processedData.procGyroMagnitudeStatsMean = mean;
-    processedData.procGyroMagnitudeStatsStd = std;
-    processedData.procGyroMagnitudeStatsMoment3 = mom3;
-    processedData.procGyroMagnitudeStatsMoment4 = mom4;
-    processedData.procGyroMagnitudeStatsPercentile25 = percentile25;
-    processedData.procGyroMagnitudeStatsPercentile50 = percentile50;
-    processedData.procGyroMagnitudeStatsPercentile75 = percentile75;
-    processedData.procGyro3dMeanX = meanX;
-    processedData.procGyro3dMeanY = meanY;
-    processedData.procGyro3dMeanZ = meanZ;
-    processedData.procGyro3dStdX = stdX;
-    processedData.procGyro3dStdY = stdY;
-    processedData.procGyro3dStdZ = stdZ;
+    processedData.rawMagnetMagnitudeStatsMean = mean;
+    processedData.rawMagnetMagnitudeStatsStd = std;
+    processedData.rawMagnetMagnitudeStatsMoment3 = mom3;
+    processedData.rawMagnetMagnitudeStatsMoment4 = mom4;
+    processedData.rawMagnetMagnitudeStatsPercentile25 = percentile25;
+    processedData.rawMagnetMagnitudeStatsPercentile50 = percentile50;
+    processedData.rawMagnetMagnitudeStatsPercentile75 = percentile75;
+    processedData.rawMagnet3dMeanX = meanX;
+    processedData.rawMagnet3dMeanY = meanY;
+    processedData.rawMagnet3dMeanZ = meanZ;
+    processedData.rawMagnet3dStdX = stdX;
+    processedData.rawMagnet3dStdY = stdY;
+    processedData.rawMagnet3dStdZ = stdZ;
     /*processedData.procGyro3dRoXy = roXy;
     processedData.procGyro3dRoYz = roYz;
     processedData.procGyro3dRoXz = roXz;*/
@@ -408,12 +398,10 @@ class SensorsManager {
           //(Optional) Set foreground notification config to keep the app alive
           //when going to the background
           foregroundNotificationConfig: const geoLoc.ForegroundNotificationConfig(
-            notificationText:
-            "Example app will continue to receive your location even when you aren't using it",
+            notificationText: "Example app will continue to receive your location even when you aren't using it",
             notificationTitle: "Running in Background",
             enableWakeLock: true,
-          )
-      );
+          ));
     } else if (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.macOS) {
       locationSettings = geoLoc.AppleSettings(
         accuracy: geoLoc.LocationAccuracy.high,
@@ -429,15 +417,14 @@ class SensorsManager {
         distanceFilter: 100,
       );
     }
-    positionStream = geoLoc.Geolocator.getPositionStream(locationSettings: locationSettings).listen(
-            (geoLoc.Position? position) {
-          print(position == null ? 'Unknown' : '${position.latitude.toString()}, ${position.longitude.toString()}');
-          if (position != null) {
-            locationEventsLock.synchronized(() {
-              locationEvents.add(position);
-            });
-          }
+    positionStream = geoLoc.Geolocator.getPositionStream(locationSettings: locationSettings).listen((geoLoc.Position? position) {
+      print(position == null ? 'Unknown' : '${position.latitude.toString()}, ${position.longitude.toString()}');
+      if (position != null) {
+        locationEventsLock.synchronized(() {
+          locationEvents.add(position);
         });
+      }
+    });
   }
 
   static void clear() {
@@ -446,11 +433,11 @@ class SensorsManager {
     magnetometerEvents.clear();
     locationEvents.clear();
     audioEvents.clear();
-    ambientTempEvents.clear();
+    /*ambientTempEvents.clear();
     humidityEvents.clear();
     lightEvents.clear();
     pressureEvents.clear();
-    proximityEvents.clear();
+    proximityEvents.clear();*/
   }
 
   static void _computeLocationStats(SensorsMeasurementEntity processedData) {
@@ -546,11 +533,9 @@ class SensorsManager {
     processedData.locationQuickFeaturesLatChange = latChange > 0.001 ? latChange : 0;
     processedData.locationQuickFeaturesLongChange = longChange > 0.001 ? longChange : 0;
 
-
     processedData.locationDiameter = diameter;
     processedData.locationLogDiameter = logDiameter;
   }
-
 
   static double findLargestGeographicDistance(List<double> latitudes, List<double> longitudes) {
     double deg2rad = math.pi / 180;
@@ -560,8 +545,7 @@ class SensorsManager {
     double maxDist = 0.0;
     for (int ii = 0; ii < latitudes.length; ii++) {
       for (int jj = ii + 1; jj < latitudes.length; jj++) {
-        double d = distanceBetweenGeographicPoints(
-            rLatitudes[ii], rLongitudes[ii], rLatitudes[jj], rLongitudes[jj]);
+        double d = distanceBetweenGeographicPoints(rLatitudes[ii], rLongitudes[ii], rLatitudes[jj], rLongitudes[jj]);
         if (d > maxDist) {
           maxDist = d;
         }
@@ -574,8 +558,7 @@ class SensorsManager {
     const R = 6371; // Radius of the earth in km
     var dLat = deg2rad(lat2 - lat1); // deg2rad below
     var dLon = deg2rad(lon2 - lon1);
-    var a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(deg2rad(lat1)) * math.cos(deg2rad(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2);
+    var a = math.sin(dLat / 2) * math.sin(dLat / 2) + math.cos(deg2rad(lat1)) * math.cos(deg2rad(lat2)) * math.sin(dLon / 2) * math.sin(dLon / 2);
     var c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
     var d = R * c; // Distance in km
     return d;
@@ -593,7 +576,7 @@ class SensorsManager {
   }
 
   static void _initAudio() async {
-    Logger.logInfo(text:"Starting audio recording...");
+    Logger.logInfo(text: "Starting audio recording...");
     final record = AudioRecorder();
     if (await record.hasPermission()) {
       if (await record.isPaused()) {
@@ -614,20 +597,20 @@ class SensorsManager {
     }
   }
 
-  static void _computeAudioStats(SensorsMeasurementEntity processedData) async {
+  static _computeAudioStats(SensorsMeasurementEntity processedData) async {
     AudioManager.stopAudioRecording();
     bool computed = await AudioManager.computeMfccFeatures();
     if (!computed) {
-      Logger.logError(text:"Failed to compute Mfcc features");
+      Logger.logError(text: "Failed to compute Mfcc features");
       return;
     }
     var f = await AudioManager.getMfccFile();
-    if(f == null) {
-      Logger.logError(text:"Failed to get Mfcc file");
+    if (f == null) {
+      Logger.logError(text: "Failed to get Mfcc file");
       return;
     }
-    if(!(await f.exists())) {
-      Logger.logError(text:"Mfcc file does not exist");
+    if (!(await f.exists())) {
+      Logger.logError(text: "Mfcc file does not exist");
       return;
     }
     //print f size in mb
@@ -662,10 +645,8 @@ class SensorsManager {
     processedData.audioNaiveMfcc12Mean = mfccMeasures[12].mean;
     processedData.audioNaiveMfcc12Std = mfccMeasures[12].std;
 
-
     //await AudioManager.clearAudioRecordingData();
     AudioManager.startAudioRecording();
-
 
     /*for (var event in audioEvents) {
       final byteData = event.buffer.asByteData();
@@ -712,8 +693,8 @@ class SensorsManager {
   static _computeDiscreteStats(SensorsMeasurementEntity processedData) async {
     //app state
     processedData.discreteAppStateIsActive = HomePage.appState == AppLifecycleState.resumed;
-    processedData.discreteAppStateIsBackground = HomePage.appState == AppLifecycleState.detached || HomePage.appState == AppLifecycleState.paused ||
-        HomePage.appState == AppLifecycleState.hidden;
+    processedData.discreteAppStateIsBackground =
+        HomePage.appState == AppLifecycleState.detached || HomePage.appState == AppLifecycleState.paused || HomePage.appState == AppLifecycleState.hidden;
     processedData.discreteAppStateIsInactive = HomePage.appState == AppLifecycleState.inactive;
     processedData.discreteAppStateMissing = false; //todo understand why this exists
 
@@ -751,28 +732,28 @@ class SensorsManager {
     processedData.discreteWifiStatusMissing = false;
   }
 
-  static void _initEnvironmentalSensors() async {
+  /*static _initEnvironmentalSensors() async {
     final environmentSensors = EnvironmentSensors();
     var tempAvailable = await environmentSensors.getSensorAvailable(SensorType.AmbientTemperature);
-    if(tempAvailable) {
+    if (tempAvailable) {
       environmentSensors.pressure.listen((ambTemp) {
         ambientTempEvents.add(ambTemp);
       });
     }
     var humidityAvailable = await environmentSensors.getSensorAvailable(SensorType.Humidity);
-    if(humidityAvailable) {
+    if (humidityAvailable) {
       environmentSensors.humidity.listen((humidity) {
         humidityEvents.add(humidity);
       });
     }
     var lightAvailable = await environmentSensors.getSensorAvailable(SensorType.Light);
-    if(lightAvailable) {
+    if (lightAvailable) {
       environmentSensors.humidity.listen((light) {
         lightEvents.add(light);
       });
     }
     var pressureAvailable = await environmentSensors.getSensorAvailable(SensorType.Pressure);
-    if(pressureAvailable) {
+    if (pressureAvailable) {
       environmentSensors.humidity.listen((pressure) {
         pressureEvents.add(pressure);
       });
@@ -780,10 +761,10 @@ class SensorsManager {
     ProximitySensor.events.listen((proximity) {
       proximityEvents.add(proximity);
     });
-  }
+    print("Environmental sensors initialized");
+  }*/
 
-  static void _computeLowFrequencyMeasurements(SensorsMeasurementEntity processedData) async {
-
+  static _computeLowFrequencyMeasurements(SensorsMeasurementEntity processedData) async {
     //battery level
     var level = await battery.batteryLevel;
     processedData.lfMeasurementsBatteryLevel = level.toDouble();
@@ -793,12 +774,12 @@ class SensorsManager {
     processedData.lfMeasurementsScreenBrightness = br;
 
     //environmental sensors
-    processedData.lfMeasurementsTemperatureAmbient = ambientTempEvents.lastOrNull ?? 0.0;
+    /*processedData.lfMeasurementsTemperatureAmbient = ambientTempEvents.lastOrNull ?? 0.0;
     processedData.lfMeasurementsRelativeHumidity = humidityEvents.lastOrNull ?? 0.0;
     processedData.lfMeasurementsLight = lightEvents.lastOrNull ?? 0.0;
     processedData.lfMeasurementsPressure = pressureEvents.lastOrNull ?? 0.0;
     processedData.lfMeasurementsProximity = proximityEvents.lastOrNull?.toDouble() ?? 0.0;
-    processedData.lfMeasurementsProximityCm = proximityEvents.lastOrNull?.toDouble() ?? 0.0; //todo check if this is correct and needed
+    processedData.lfMeasurementsProximityCm = proximityEvents.lastOrNull?.toDouble() ?? 0.0;*/
   }
 
   static void _computeTimeOfDayFeatures(SensorsMeasurementEntity processedData) {
@@ -814,14 +795,14 @@ class SensorsManager {
     processedData.discreteTimeOfDayBetween21and3 = hour >= 21 || hour < 3;
   }
 
-static Future<void> predict() async {
+  static Future<void> predict() async {
     if (data.isEmpty) {
       print("No data to predict, skipping request to backend");
       return;
     }
     String? prediction = await requestPredictionToBackend(data);
     data.clear();
-    if(prediction == null) {
+    if (prediction == null) {
       print("No prediction received");
       return;
     }
@@ -844,11 +825,7 @@ static Future<void> predict() async {
     Response res;
 
     try {
-      res = await dio.post("https://loved-finally-trout.ngrok-free.app/predict", data:
-        {
-          "data": sensorMeasurements.map((e) => e.toJson()).toList()
-        }
-      );
+      res = await dio.post("${Configuration.BASE_URL}/predict", data: {"data": sensorMeasurements.map((e) => e.toJson()).toList()});
     } catch (e) {
       print("Error while sending data to backend: $e");
       return null;
@@ -856,24 +833,27 @@ static Future<void> predict() async {
     return res.data["prediction"];
   }
 
-   static void onActivityData(Activity activityEvent) {
+  static void onActivityData(Activity activityEvent) {
     print(activityEvent);
-    lastActivityEvent = activityEvent;
+    activityEvents.add(activityEvent);
     activityStream.add(activityEvent);
   }
-  
+
   static void _computeActivityFeatures(SensorsMeasurementEntity processedData) {
-    var activity = lastActivityEvent;
-    if(activity != null) {
+    var activity = activityEvents.lastOrNull;
+    if (activity != null) {
       processedData.activityType = activity.type;
       processedData.activityConfidence = activity.confidence;
     }
-
   }
 
   static Future<List<MfccMeasureEntity>> _computeMfccProperties(File file) async {
     final lines = await file.readAsLines();
 
+    if(lines.isEmpty) {
+      print("No data in file: ${file.path}");
+      return [];
+    }
     // Parse the header
     final header = lines[0].split(',');
     final numColumns = header.length;
@@ -886,7 +866,7 @@ static Future<void> predict() async {
       final values = lines[i].split(',');
       for (var j = 0; j < numColumns; j++) {
         var v = double.tryParse(values[j]);
-        if(v == null) {
+        if (v == null) {
           print("Error parsing value: ${values[j]}");
           v = 0;
         }
@@ -911,14 +891,15 @@ static Future<void> predict() async {
   }
 
   static double calculateMean(List<double> values) {
+    if(values.isEmpty) return 0;
     return values.reduce((a, b) => a + b) / values.length;
   }
 
   static double calculateStandardDeviation(List<double> values, double mean) {
+    if(values.isEmpty) return 0;
     final variance = values.map((x) => math.pow(x - mean, 2)).reduce((a, b) => a + b) / values.length;
     return math.sqrt(variance);
   }
-  
 }
 
 class PredictionEntity {

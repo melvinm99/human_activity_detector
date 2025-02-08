@@ -123,14 +123,14 @@ class SensorsMeasurementEntity {
   bool? discreteWifiStatusIsReachableViaWifi;
   bool? discreteWifiStatusIsReachableViaWwan;
   bool? discreteWifiStatusMissing;
-  double? lfMeasurementsLight;
+  /*double? lfMeasurementsLight;
   double? lfMeasurementsPressure;
   double? lfMeasurementsProximityCm;
   double? lfMeasurementsProximity;
-  double? lfMeasurementsRelativeHumidity;
+  double? lfMeasurementsRelativeHumidity;*/
   double? lfMeasurementsBatteryLevel;
   double? lfMeasurementsScreenBrightness;
-  double? lfMeasurementsTemperatureAmbient;
+  //double? lfMeasurementsTemperatureAmbient;
   bool? discreteTimeOfDayBetween0and6;
   bool? discreteTimeOfDayBetween3and9;
   bool? discreteTimeOfDayBetween6and12;
@@ -267,14 +267,14 @@ class SensorsMeasurementEntity {
       'discreteWifiStatusIsReachableViaWifi': discreteWifiStatusIsReachableViaWifi,
       'discreteWifiStatusIsReachableViaWwan': discreteWifiStatusIsReachableViaWwan,
       'discreteWifiStatusMissing': discreteWifiStatusMissing,
-      'lfMeasurementsLight': lfMeasurementsLight,
+      /*'lfMeasurementsLight': lfMeasurementsLight,
       'lfMeasurementsPressure': lfMeasurementsPressure,
       'lfMeasurementsProximityCm': lfMeasurementsProximityCm,
       'lfMeasurementsProximity': lfMeasurementsProximity,
-      'lfMeasurementsRelativeHumidity': lfMeasurementsRelativeHumidity,
+      'lfMeasurementsRelativeHumidity': lfMeasurementsRelativeHumidity,*/
       'lfMeasurementsBatteryLevel': lfMeasurementsBatteryLevel,
       'lfMeasurementsScreenBrightness': lfMeasurementsScreenBrightness,
-      'lfMeasurementsTemperatureAmbient': lfMeasurementsTemperatureAmbient,
+      //'lfMeasurementsTemperatureAmbient': lfMeasurementsTemperatureAmbient,
       'discreteTimeOfDayBetween0and6': discreteTimeOfDayBetween0and6,
       'discreteTimeOfDayBetween3and9': discreteTimeOfDayBetween3and9,
       'discreteTimeOfDayBetween6and12': discreteTimeOfDayBetween6and12,
@@ -284,9 +284,10 @@ class SensorsMeasurementEntity {
       'discreteTimeOfDayBetween18and24': discreteTimeOfDayBetween18and24,
       'discreteTimeOfDayBetween21and3': discreteTimeOfDayBetween21and3,
       'activityType': activityType == ActivityType.IN_VEHICLE ? "IN_VEHICLE" :
-      activityType == ActivityType.WALKING ? "WALKING" :
-      activityType == ActivityType.RUNNING ? "RUNNING" :
-      activityType == ActivityType.ON_BICYCLE ? "ON_BICYCLE" : null,
+        activityType == ActivityType.WALKING ? "WALKING" :
+        activityType == ActivityType.RUNNING ? "RUNNING" :
+        activityType == ActivityType.ON_BICYCLE ? "ON_BICYCLE" :
+        null,
       'activityConfidence': activityConfidence?.index,
     };
   }
