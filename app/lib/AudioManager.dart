@@ -7,6 +7,10 @@ class AudioManager {
   static const platform = MethodChannel('com.activity.detector/audio_processing');
 
   static Future<bool> startAudioRecording() async {
+    if(!Platform.isAndroid) {
+      print("Audio recording is only supported on Android");
+      return false;
+    }
     try {
       final bool started = await platform.invokeMethod('startAudioRecording');
       return started;
@@ -19,9 +23,9 @@ class AudioManager {
   static Future<bool> stopAudioRecording() async {
     try {
       final bool stopped = await platform.invokeMethod('stopAudioRecording'); //stops recording and computes MFCC features
-      if(stopped) {
+      /*if(stopped) {
         clearAudioRecordingData();
-      }
+      }*/
       return stopped;
     } on PlatformException catch (e) {
       print("Failed to stop recording: '${e.message}'.");

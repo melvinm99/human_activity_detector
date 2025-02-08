@@ -284,9 +284,9 @@ class SensorsMeasurementEntity {
       'discreteTimeOfDayBetween18and24': discreteTimeOfDayBetween18and24,
       'discreteTimeOfDayBetween21and3': discreteTimeOfDayBetween21and3,
       'activityType': activityType == ActivityType.IN_VEHICLE ? "IN_VEHICLE" :
-          activityType == ActivityType.WALKING ? "WALKING" :
-          activityType == ActivityType.RUNNING ? "RUNNING" :
-          activityType == ActivityType.ON_BICYCLE ? "ON_BICYCLE" : null,
+      activityType == ActivityType.WALKING ? "WALKING" :
+      activityType == ActivityType.RUNNING ? "RUNNING" :
+      activityType == ActivityType.ON_BICYCLE ? "ON_BICYCLE" : null,
       'activityConfidence': activityConfidence?.index,
     };
   }
