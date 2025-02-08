@@ -163,11 +163,11 @@ class SensorsMeasurementEntity {
       'rawAcc3dRoYz': rawAcc3dRoYz,
       'procGyroMagnitudeStatsMean': procGyroMagnitudeStatsMean,
       'procGyroMagnitudeStatsStd': procGyroMagnitudeStatsStd,
-      'procGyroMagnitudeStatsMoment3': procGyroMagnitudeStatsMoment3,
+      /*'procGyroMagnitudeStatsMoment3': procGyroMagnitudeStatsMoment3,
       'procGyroMagnitudeStatsMoment4': procGyroMagnitudeStatsMoment4,
       'procGyroMagnitudeStatsPercentile25': procGyroMagnitudeStatsPercentile25,
       'procGyroMagnitudeStatsPercentile50': procGyroMagnitudeStatsPercentile50,
-      'procGyroMagnitudeStatsPercentile75': procGyroMagnitudeStatsPercentile75,
+      'procGyroMagnitudeStatsPercentile75': procGyroMagnitudeStatsPercentile75,*/
       'procGyro3dMeanX': procGyro3dMeanX,
       'procGyro3dMeanY': procGyro3dMeanY,
       'procGyro3dMeanZ': procGyro3dMeanZ,
@@ -209,10 +209,10 @@ class SensorsMeasurementEntity {
       'locationBestVerticalAccuracy': locationBestVerticalAccuracy,
       'locationDiameter': locationDiameter,
       'locationLogDiameter': locationLogDiameter,
-      'locationQuickFeaturesStdLat': locationQuickFeaturesStdLat,
-      'locationQuickFeaturesStdLong': locationQuickFeaturesStdLong,
-      'locationQuickFeaturesLatChange': locationQuickFeaturesLatChange,
-      'locationQuickFeaturesLongChange': locationQuickFeaturesLongChange,
+      'locationQuickFeaturesStdLat': locationQuickFeaturesStdLat == null || locationQuickFeaturesStdLat!.isNaN ? null : locationQuickFeaturesStdLat,
+      'locationQuickFeaturesStdLong': locationQuickFeaturesStdLong == null || locationQuickFeaturesStdLong!.isNaN ? null : locationQuickFeaturesStdLong,
+      'locationQuickFeaturesLatChange': locationQuickFeaturesLatChange == null || locationQuickFeaturesLatChange!.isNaN ? null : locationQuickFeaturesLatChange,
+      'locationQuickFeaturesLongChange': locationQuickFeaturesLongChange == null || locationQuickFeaturesLongChange!.isNaN ? null : locationQuickFeaturesLongChange,
       'audioNaiveMfcc0Mean': audioNaiveMfcc0Mean,
       'audioNaiveMfcc1Mean': audioNaiveMfcc1Mean,
       'audioNaiveMfcc2Mean': audioNaiveMfcc2Mean,
@@ -283,7 +283,10 @@ class SensorsMeasurementEntity {
       'discreteTimeOfDayBetween15and21': discreteTimeOfDayBetween15and21,
       'discreteTimeOfDayBetween18and24': discreteTimeOfDayBetween18and24,
       'discreteTimeOfDayBetween21and3': discreteTimeOfDayBetween21and3,
-      'activityType': activityType?.index,
+      'activityType': activityType == ActivityType.IN_VEHICLE ? "IN_VEHICLE" :
+          activityType == ActivityType.WALKING ? "WALKING" :
+          activityType == ActivityType.RUNNING ? "RUNNING" :
+          activityType == ActivityType.ON_BICYCLE ? "ON_BICYCLE" : null,
       'activityConfidence': activityConfidence?.index,
     };
   }

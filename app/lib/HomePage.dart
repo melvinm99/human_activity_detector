@@ -7,6 +7,7 @@ import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
 import 'package:human_activity_detector/Logger.dart';
 import 'package:human_activity_detector/SensorsManager.dart';
 import 'package:human_activity_detector/SleepApiNotifier.dart';
+import 'package:human_activity_detector/configuration.dart';
 import 'package:share_plus/share_plus.dart';
 
 class HomePage extends StatefulWidget {
@@ -272,7 +273,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final status = contentParts[4];
 
     try {
-      res = await dio.post("https://tesibe.swipeapp.studio/sample/tesi", data: {
+      res = await dio.post("${Configuration.BASE_URL}/sample", data: {
         "startTime": startTime,
         "endTime": endTime,
         "duration": duration,
@@ -304,7 +305,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final motion = contentParts[4];
 
     try {
-      res = await dio.post("https://tesibe.swipeapp.studio/sample/tesi", data: {
+      res = await dio.post(Configuration.BASE_URL + "/sample", data: {
         "timestamp": timestamp,
         "confidence": confidence,
         "light": light,

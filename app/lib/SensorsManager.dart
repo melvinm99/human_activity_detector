@@ -15,6 +15,7 @@ import 'package:human_activity_detector/HomePage.dart';
 import 'package:human_activity_detector/Logger.dart';
 import 'package:human_activity_detector/RingerManager.dart';
 import 'package:human_activity_detector/SleepApiNotifier.dart';
+import 'package:human_activity_detector/configuration.dart';
 import 'package:human_activity_detector/entity/SensorsMeasurementEntity.dart';
 import 'package:phone_state/phone_state.dart';
 import 'package:proximity_sensor/proximity_sensor.dart';
@@ -22,6 +23,7 @@ import 'package:record/record.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:synchronized/synchronized.dart';
+import 'dart:math' as math;
 
 class SensorsManager {
   static Timer? processingTimer;
@@ -77,12 +79,12 @@ class SensorsManager {
   static final StreamController<Activity> activityStream = StreamController.broadcast();
 
   static void init() {
-    processingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+    processingTimer = Timer.periodic(Configuration.PROCESSING_TIME_INTERVAL, (timer) {
       _processData();
     });
-    requestPredictionTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    /*requestPredictionTimer = Timer.periodic(Configuration.PREDICTION_REQUEST_TIME_INTERVAL, (timer) {
       predict();
-    });
+    });*/
     accelerometerStreamSubscription = accelerometerEventStream().listen(
           (AccelerometerEvent event) {
         accelerometerEventsLock.synchronized(() {
@@ -126,7 +128,6 @@ class SensorsManager {
 
     _initGeoLocator();
     _initAudio();
-    AudioManager.startAudioRecording();
     _initEnvironmentalSensors();
 
     // Subscribe to activity recognition stream.
@@ -159,7 +160,7 @@ class SensorsManager {
     _activityStreamSubscription?.cancel();
   }
 
-  static void _processData() {
+  static void _processData() async {
     var processedData = SensorsMeasurementEntity();
     // compute raw accelerometer magnitude stats
     _computeRawAccMagnitudeStats(processedData);
@@ -172,7 +173,7 @@ class SensorsManager {
     //compute audio stats
     _computeAudioStats(processedData);
     //compute discrete stats
-    _computeDiscreteStats(processedData);
+    await _computeDiscreteStats(processedData);
     //compute low-frequency measurements
     _computeLowFrequencyMeasurements(processedData);
     //compute time of day features
@@ -184,59 +185,47 @@ class SensorsManager {
     data.add(processedData);
 
     clear();
+
+    predict();
   }
 
   static void _computeRawAccMagnitudeStats(SensorsMeasurementEntity processedData) {
-    var mean = 0.0;
-    var std = 0.0;
-    var moment3 = 0.0;
-    var moment4 = 0.0;
-    var percentile25 = 0.0;
-    var percentile50 = 0.0;
-    var percentile75 = 0.0;
-    var meanX = 0.0;
-    var meanY = 0.0;
-    var meanZ = 0.0;
-    var stdX = 0.0;
-    var stdY = 0.0;
-    var stdZ = 0.0;
-    var roXy = 0.0;
-    var roYz = 0.0;
-    var roXz = 0.0;
     var app = [...accelerometerEvents];
+    List<num> magnitudes = [];
+    List<num> valuesX = [];
+    List<num> valuesY = [];
+    List<num> valuesZ = [];
+
     for (var event in app) {
-      mean += event.x + event.y + event.z;
-      std += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment3 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment4 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) *
-          (event.x + event.y + event.z - mean);
-      percentile25 += event.x + event.y + event.z;
-      percentile50 += event.x + event.y + event.z;
-      percentile75 += event.x + event.y + event.z;
-      meanX += event.x;
-      meanY += event.y;
-      meanZ += event.z;
-      stdX += (event.x - meanX) * (event.x - meanX);
-      stdY += (event.y - meanY) * (event.y - meanY);
-      stdZ += (event.z - meanZ) * (event.z - meanZ);
-      roXy += (event.x - meanX) * (event.y - meanY);
-      roYz += (event.y - meanY) * (event.z - meanZ);
-      roXz += (event.x - meanX) * (event.z - meanZ);
+      var sum = event.x + event.y + event.z;
+      magnitudes.add(math.pow(sum, 2));
+      valuesX.add(event.x);
+      valuesY.add(event.y);
+      valuesZ.add(event.z);
     }
-    mean /= accelerometerEvents.length;
-    std /= accelerometerEvents.length;
-    std = sqrt(std);
-    moment3 /= accelerometerEvents.length;
-    moment4 /= accelerometerEvents.length;
-    percentile25 /= accelerometerEvents.length;
-    percentile50 /= accelerometerEvents.length;
-    percentile75 /= accelerometerEvents.length;
+    var magnitude = math.sqrt(magnitudes.reduce((a, b) => a + b)); //L2 norm
+    var magnitudeX = valuesX.reduce((a, b) => a + b);
+    var magnitudeY = valuesY.reduce((a, b) => a + b);
+    var magnitudeZ = valuesZ.reduce((a, b) => a + b);
 
+    var mean = magnitude / accelerometerEvents.length;
+    var meanX = magnitudeX / accelerometerEvents.length;
+    var meanY = magnitudeY / accelerometerEvents.length;
+    var meanZ = magnitudeZ / accelerometerEvents.length;
 
+    var std = standardDeviation(magnitudes);
+    var stdX = standardDeviation(valuesX);
+    var stdY = standardDeviation(valuesY);
+    var stdZ = standardDeviation(valuesZ);
+    var mom3 = moment3(magnitudes);
+    var mom4 = moment4(magnitudes);
+    var percentile25 = scoreAtPercentile(magnitudes, 0.25);
+    var percentile50 = scoreAtPercentile(magnitudes, 0.5);
+    var percentile75 = scoreAtPercentile(magnitudes, 0.75);
     processedData.rawAccMagnitudeStatsMean = mean;
     processedData.rawAccMagnitudeStatsStd = std;
-    processedData.rawAccMagnitudeStatsMoment3 = moment3;
-    processedData.rawAccMagnitudeStatsMoment4 = moment4;
+    processedData.rawAccMagnitudeStatsMoment3 = mom3;
+    processedData.rawAccMagnitudeStatsMoment4 = mom4;
     processedData.rawAccMagnitudeStatsPercentile25 = percentile25;
     processedData.rawAccMagnitudeStatsPercentile50 = percentile50;
     processedData.rawAccMagnitudeStatsPercentile75 = percentile75;
@@ -246,61 +235,100 @@ class SensorsManager {
     processedData.rawAcc3dStdX = stdX;
     processedData.rawAcc3dStdY = stdY;
     processedData.rawAcc3dStdZ = stdZ;
-    processedData.rawAcc3dRoXy = roXy;
+    /*processedData.rawAcc3dRoXy = roXy;
     processedData.rawAcc3dRoYz = roYz;
-    processedData.rawAcc3dRoXz = roXz;
+    processedData.rawAcc3dRoXz = roXz;*/
+  }
+
+  static double moment3(List<num> magnitudes) {
+    if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
+
+    final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
+    final sumCubedDeviations = magnitudes
+        .map((x) => pow(x - mean, 3))
+        .reduce((a, b) => a + b);
+
+    var mom3 = sumCubedDeviations / magnitudes.length;
+    if (mom3 == 0) return 0;
+    return mom3.sign * pow(mom3.abs(), 1/3);
+  }
+
+  static double moment4(List<num> magnitudes) {
+    if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
+
+    final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
+    final sumFourthDeviations = magnitudes
+        .map((x) => pow(x - mean, 4))
+        .reduce((a, b) => a + b);
+
+    final fourthMoment = sumFourthDeviations / magnitudes.length;
+    return pow(fourthMoment, 0.25) as double;
+  }
+
+  static double standardDeviation(List<num> magnitudes) {
+    if (magnitudes.isEmpty) throw ArgumentError('Data cannot be empty');
+
+
+    final mean = magnitudes.reduce((a, b) => a + b) / magnitudes.length;
+    final sumSquaredDiffs = magnitudes
+        .map((x) => pow(x - mean, 2))
+        .reduce((a, b) => a + b);
+
+    final variance = sumSquaredDiffs / (data.length);
+    return sqrt(variance);
+  }
+
+  static double scoreAtPercentile(List<num> data, num percentile) {
+    if (data.isEmpty) throw ArgumentError('Data cannot be empty');
+
+    final sorted = List<double>.from(data)..sort();
+    final index = (sorted.length - 1) * percentile;
+    final lower = index.floor();
+    final fraction = index - lower;
+
+    return (lower >= sorted.length - 1)
+        ? sorted[lower]
+        : sorted[lower] * (1 - fraction) + sorted[lower + 1] * fraction;
   }
 
   static void _computeRawGyroMagnitudeStats(SensorsMeasurementEntity processedData) {
-    var mean = 0.0;
-    var std = 0.0;
-    var moment3 = 0.0;
-    var moment4 = 0.0;
-    var percentile25 = 0.0;
-    var percentile50 = 0.0;
-    var percentile75 = 0.0;
-    var meanX = 0.0;
-    var meanY = 0.0;
-    var meanZ = 0.0;
-    var stdX = 0.0;
-    var stdY = 0.0;
-    var stdZ = 0.0;
-    var roXy = 0.0;
-    var roYz = 0.0;
-    var roXz = 0.0;
     var app = [...gyroscopeEvents];
+    List<num> magnitudes = [];
+    List<num> valuesX = [];
+    List<num> valuesY = [];
+    List<num> valuesZ = [];
+
     for (var event in app) {
-      mean += event.x + event.y + event.z;
-      std += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment3 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment4 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) *
-          (event.x + event.y + event.z - mean);
-      percentile25 += event.x + event.y + event.z;
-      percentile50 += event.x + event.y + event.z;
-      percentile75 += event.x + event.y + event.z;
-      meanX += event.x;
-      meanY += event.y;
-      meanZ += event.z;
-      stdX += (event.x - meanX) * (event.x - meanX);
-      stdY += (event.y - meanY) * (event.y - meanY);
-      stdZ += (event.z - meanZ) * (event.z - meanZ);
-      roXy += (event.x - meanX) * (event.y - meanY);
-      roYz += (event.y - meanY) * (event.z - meanZ);
-      roXz += (event.x - meanX) * (event.z - meanZ);
+      var sum = event.x + event.y + event.z;
+      magnitudes.add(math.pow(sum, 2));
+      valuesX.add(event.x);
+      valuesY.add(event.y);
+      valuesZ.add(event.z);
     }
-    mean /= gyroscopeEvents.length;
-    std /= gyroscopeEvents.length;
-    std = sqrt(std);
-    moment3 /= gyroscopeEvents.length;
-    moment4 /= gyroscopeEvents.length;
-    percentile25 /= gyroscopeEvents.length;
-    percentile50 /= gyroscopeEvents.length;
-    percentile75 /= gyroscopeEvents.length;
+    var magnitude = math.sqrt(magnitudes.reduce((a, b) => a + b)); //L2 norm
+    var magnitudeX = valuesX.reduce((a, b) => a + b);
+    var magnitudeY = valuesY.reduce((a, b) => a + b);
+    var magnitudeZ = valuesZ.reduce((a, b) => a + b);
+
+    var mean = magnitude / accelerometerEvents.length;
+    var meanX = magnitudeX / accelerometerEvents.length;
+    var meanY = magnitudeY / accelerometerEvents.length;
+    var meanZ = magnitudeZ / accelerometerEvents.length;
+
+    var std = standardDeviation(magnitudes);
+    var stdX = standardDeviation(valuesX);
+    var stdY = standardDeviation(valuesY);
+    var stdZ = standardDeviation(valuesZ);
+    var mom3 = moment3(magnitudes);
+    var mom4 = moment4(magnitudes);
+    var percentile25 = scoreAtPercentile(magnitudes, 0.25);
+    var percentile50 = scoreAtPercentile(magnitudes, 0.5);
+    var percentile75 = scoreAtPercentile(magnitudes, 0.75);
 
     processedData.procGyroMagnitudeStatsMean = mean;
     processedData.procGyroMagnitudeStatsStd = std;
-    processedData.procGyroMagnitudeStatsMoment3 = moment3;
-    processedData.procGyroMagnitudeStatsMoment4 = moment4;
+    processedData.procGyroMagnitudeStatsMoment3 = mom3;
+    processedData.procGyroMagnitudeStatsMoment4 = mom4;
     processedData.procGyroMagnitudeStatsPercentile25 = percentile25;
     processedData.procGyroMagnitudeStatsPercentile50 = percentile50;
     processedData.procGyroMagnitudeStatsPercentile75 = percentile75;
@@ -310,61 +338,49 @@ class SensorsManager {
     processedData.procGyro3dStdX = stdX;
     processedData.procGyro3dStdY = stdY;
     processedData.procGyro3dStdZ = stdZ;
-    processedData.procGyro3dRoXy = roXy;
+    /*processedData.procGyro3dRoXy = roXy;
     processedData.procGyro3dRoYz = roYz;
-    processedData.procGyro3dRoXz = roXz;
+    processedData.procGyro3dRoXz = roXz;*/
   }
 
   static void _computeRawMagnetMagnitudeStats(SensorsMeasurementEntity processedData) {
-    var mean = 0.0;
-    var std = 0.0;
-    var moment3 = 0.0;
-    var moment4 = 0.0;
-    var percentile25 = 0.0;
-    var percentile50 = 0.0;
-    var percentile75 = 0.0;
-    var meanX = 0.0;
-    var meanY = 0.0;
-    var meanZ = 0.0;
-    var stdX = 0.0;
-    var stdY = 0.0;
-    var stdZ = 0.0;
-    var roXy = 0.0;
-    var roYz = 0.0;
-    var roXz = 0.0;
     var app = [...magnetometerEvents];
+    List<num> magnitudes = [];
+    List<num> valuesX = [];
+    List<num> valuesY = [];
+    List<num> valuesZ = [];
+
     for (var event in app) {
-      mean += event.x + event.y + event.z;
-      std += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment3 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean);
-      moment4 += (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) * (event.x + event.y + event.z - mean) *
-          (event.x + event.y + event.z - mean);
-      percentile25 += event.x + event.y + event.z;
-      percentile50 += event.x + event.y + event.z;
-      percentile75 += event.x + event.y + event.z;
-      meanX += event.x;
-      meanY += event.y;
-      meanZ += event.z;
-      stdX += (event.x - meanX) * (event.x - meanX);
-      stdY += (event.y - meanY) * (event.y - meanY);
-      stdZ += (event.z - meanZ) * (event.z - meanZ);
-      roXy += (event.x - meanX) * (event.y - meanY);
-      roYz += (event.y - meanY) * (event.z - meanZ);
-      roXz += (event.x - meanX) * (event.z - meanZ);
+      var sum = event.x + event.y + event.z;
+      magnitudes.add(math.pow(sum, 2));
+      valuesX.add(event.x);
+      valuesY.add(event.y);
+      valuesZ.add(event.z);
     }
-    mean /= magnetometerEvents.length;
-    std /= magnetometerEvents.length;
-    std = sqrt(std);
-    moment3 /= magnetometerEvents.length;
-    moment4 /= magnetometerEvents.length;
-    percentile25 /= magnetometerEvents.length;
-    percentile50 /= magnetometerEvents.length;
-    percentile75 /= magnetometerEvents.length;
+    var magnitude = math.sqrt(magnitudes.reduce((a, b) => a + b)); //L2 norm
+    var magnitudeX = valuesX.reduce((a, b) => a + b);
+    var magnitudeY = valuesY.reduce((a, b) => a + b);
+    var magnitudeZ = valuesZ.reduce((a, b) => a + b);
+
+    var mean = magnitude / accelerometerEvents.length;
+    var meanX = magnitudeX / accelerometerEvents.length;
+    var meanY = magnitudeY / accelerometerEvents.length;
+    var meanZ = magnitudeZ / accelerometerEvents.length;
+
+    var std = standardDeviation(magnitudes);
+    var stdX = standardDeviation(valuesX);
+    var stdY = standardDeviation(valuesY);
+    var stdZ = standardDeviation(valuesZ);
+    var mom3 = moment3(magnitudes);
+    var mom4 = moment4(magnitudes);
+    var percentile25 = scoreAtPercentile(magnitudes, 0.25);
+    var percentile50 = scoreAtPercentile(magnitudes, 0.5);
+    var percentile75 = scoreAtPercentile(magnitudes, 0.75);
 
     processedData.procGyroMagnitudeStatsMean = mean;
     processedData.procGyroMagnitudeStatsStd = std;
-    processedData.procGyroMagnitudeStatsMoment3 = moment3;
-    processedData.procGyroMagnitudeStatsMoment4 = moment4;
+    processedData.procGyroMagnitudeStatsMoment3 = mom3;
+    processedData.procGyroMagnitudeStatsMoment4 = mom4;
     processedData.procGyroMagnitudeStatsPercentile25 = percentile25;
     processedData.procGyroMagnitudeStatsPercentile50 = percentile50;
     processedData.procGyroMagnitudeStatsPercentile75 = percentile75;
@@ -374,9 +390,9 @@ class SensorsManager {
     processedData.procGyro3dStdX = stdX;
     processedData.procGyro3dStdY = stdY;
     processedData.procGyro3dStdZ = stdZ;
-    processedData.procGyro3dRoXy = roXy;
+    /*processedData.procGyro3dRoXy = roXy;
     processedData.procGyro3dRoYz = roYz;
-    processedData.procGyro3dRoXz = roXz;
+    processedData.procGyro3dRoXz = roXz;*/
   }
 
   static void _initGeoLocator() {
@@ -432,7 +448,7 @@ class SensorsManager {
     lightEvents.clear();
     pressureEvents.clear();
     proximityEvents.clear();
-    activityEvents.clear();
+    //activityEvents.clear();
   }
 
   static void _computeLocationStats(SensorsMeasurementEntity processedData) {
@@ -576,6 +592,7 @@ class SensorsManager {
 
   static void _initAudio() async {
     Logger.logInfo(text:"Starting audio recording...");
+    AudioManager.startAudioRecording();
     final record = AudioRecorder();
     if (await record.hasPermission()) {
       if (await record.isPaused()) {
@@ -658,7 +675,7 @@ class SensorsManager {
     }*/
   }
 
-  static void _computeDiscreteStats(SensorsMeasurementEntity processedData) async {
+  static _computeDiscreteStats(SensorsMeasurementEntity processedData) async {
     //app state
     processedData.discreteAppStateIsActive = HomePage.appState == AppLifecycleState.resumed;
     processedData.discreteAppStateIsBackground = HomePage.appState == AppLifecycleState.detached || HomePage.appState == AppLifecycleState.paused ||
@@ -788,7 +805,7 @@ static Future<bool> predict() async {
     Response res;
 
     try {
-      res = await dio.post("https://tesibe.swipeapp.studio/predict", data: 
+      res = await dio.post("${Configuration.BASE_URL}/predict", data:
         {
           "data": sensorMeasurements.map((e) => e.toJson()).toList()
         }
