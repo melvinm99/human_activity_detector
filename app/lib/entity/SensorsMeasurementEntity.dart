@@ -142,6 +142,9 @@ class SensorsMeasurementEntity {
   ActivityType? activityType;
   ActivityConfidence? activityConfidence;
 
+  DateTime? timestamp;
+  String? sessionId;
+
   //to json
   Map<String, dynamic> toJson() {
     return {
@@ -289,6 +292,8 @@ class SensorsMeasurementEntity {
         activityType == ActivityType.ON_BICYCLE ? "ON_BICYCLE" :
         null,
       'activityConfidence': activityConfidence?.index,
+      'timestamp': timestamp?.millisecondsSinceEpoch,
+      'sessionId': sessionId,
     };
   }
 }

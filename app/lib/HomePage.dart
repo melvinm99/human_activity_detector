@@ -28,11 +28,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   final _controller = ScrollController();
 
-  bool _systemStarted = false;
-
-  void _handleError(dynamic error) {
-    Logger.logError(text: 'Catch Error >> $error');
-  }
+  bool systemStarted = false;
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
@@ -267,9 +263,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     const SizedBox(width: 20),
                     Flexible(
                       child: RoundedButton(
-                          label: _systemStarted ? 'Stop' : 'Start',
+                          label: systemStarted ? 'Stop' : 'Start',
                           onTap: () {
-                            if (_systemStarted) {
+                            if (systemStarted) {
                               _stopSystem();
                             } else {
                               _startSystem();
@@ -398,7 +394,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _startSystem() async {
     setState(() {
-      _systemStarted = true;
+      systemStarted = true;
     });
     final activityRecognition = FlutterActivityRecognition.instance;
 
@@ -431,7 +427,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     _activityStreamSubscription?.cancel();
     _activityStreamSubscription = null;
     setState(() {
-      _systemStarted = false;
+      systemStarted = false;
     });
   }
 }

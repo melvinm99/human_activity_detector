@@ -5,7 +5,6 @@ import 'dart:math' as math;
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:dio/dio.dart';
-import 'package:environment_sensors/environment_sensors.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
@@ -18,15 +17,15 @@ import 'package:human_activity_detector/SleepApiNotifier.dart';
 import 'package:human_activity_detector/configuration.dart';
 import 'package:human_activity_detector/entity/SensorsMeasurementEntity.dart';
 import 'package:phone_state/phone_state.dart';
-import 'package:proximity_sensor/proximity_sensor.dart';
 import 'package:record/record.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:synchronized/synchronized.dart';
+import 'package:uuid/uuid.dart';
 
 class SensorsManager {
   static Timer? processingTimer;
-  static Timer? requestPredictionTimer;
+  //static Timer? requestPredictionTimer;
 
   static var accelerometerEventsLock = Lock();
   static List<AccelerometerEvent> accelerometerEvents = [];
@@ -79,11 +78,13 @@ class SensorsManager {
 
   static final StreamController<PredictionEntity> predictionStream = StreamController.broadcast();
 
+  static String? sessionId;
   static void init() {
+    sessionId = Uuid().v4();
     processingTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
       _processData();
     });
-    /*requestPredictionTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+    /*requestPredictionTimer = Timer.periodic(const Duration(seconds: 60), (timer) {
       predict();
     });*/
     accelerometerStreamSubscription = accelerometerEventStream().listen(
@@ -159,7 +160,7 @@ class SensorsManager {
     activityEvents.clear();
     AudioManager.stopAudioRecording();
     _activityStreamSubscription?.cancel();
-    requestPredictionTimer?.cancel();
+    //requestPredictionTimer?.cancel();
   }
 
   static _processData() async {
@@ -184,11 +185,16 @@ class SensorsManager {
     //compute activity features
     _computeActivityFeatures(processedData);
 
+    processedData.timestamp = DateTime.now();
+    processedData.sessionId = sessionId;
+
     data.add(processedData);
 
     clear();
 
-    predict();
+    if(data.length == Configuration.PREDICTION_SIZE) {
+      predict();
+    }
   }
 
   static void _computeRawAccMagnitudeStats(SensorsMeasurementEntity processedData) {
